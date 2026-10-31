@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Container,
-  Paper,
   TextField,
   Button,
   Typography,
@@ -12,8 +11,13 @@ import {
   Grid,
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+
+const USERNAME_RE = /^[a-zA-Z0-9_.-]{3,40}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const Register = () => {
+  const { language, t } = useLanguage();
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -25,11 +29,17 @@ const Register = () => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
+  const { register, user, isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && user) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [authLoading, isAuthenticated, user, navigate]);
+
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
     setError('');
   };
 
@@ -37,133 +47,145 @@ const Register = () => {
     e.preventDefault();
     setError('');
 
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+    if (!formData.full_name.trim()) {
+      setError(t('auth.validation.fullNameRequired'));
       return;
     }
-
+    if (!USERNAME_RE.test(formData.username.trim())) {
+      setError(t('auth.validation.usernameFormat'));
+      return;
+    }
+    if (!EMAIL_RE.test(formData.email.trim())) {
+      setError(t('auth.validation.emailInvalid'));
+      return;
+    }
     if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters');
+      setError(t('auth.validation.passwordLength'));
+      return;
+    }
+    if (formData.password !== formData.confirmPassword) {
+      setError(t('auth.validation.passwordMismatch'));
       return;
     }
 
     setLoading(true);
-
     const { confirmPassword, ...registerData } = formData;
-    const result = await register(registerData);
+    const result = await register({
+      ...registerData,
+      username: registerData.username.trim(),
+      email: registerData.email.trim(),
+      full_name: registerData.full_name.trim(),
+      preferred_language: language,
+    });
+    setLoading(false);
 
     if (result.success) {
       navigate('/dashboard');
     } else {
       setError(result.message || 'Registration failed. Please try again.');
     }
-
-    setLoading(false);
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 8, minHeight: '80vh', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-      <Box className="glass-panel" sx={{ p: 5, borderRadius: 4 }}>
-        <Box sx={{ mb: 5, textAlign: 'center' }}>
-          <Typography variant="h4" component="h1" gutterBottom fontWeight="bold" className="gradient-text">
-            Join the Community
+    <Container maxWidth="md" sx={{ py: 6 }}>
+      <Box className="glass-panel" sx={{ p: { xs: 3, sm: 5 } }}>
+        <Box sx={{ mb: 4, textAlign: 'center' }}>
+          <Typography variant="h4" component="h1" gutterBottom fontWeight={800} className="gradient-text">
+            {t('auth.registerTitle')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Start your learning journey with us today
+            {t('auth.registerSubtitle')}
           </Typography>
         </Box>
 
         {error && (
-          <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+          <Alert severity="error" role="alert" sx={{ mb: 3 }}>
             {error}
           </Alert>
         )}
 
-        <Box component="form" onSubmit={handleSubmit}>
-          <Grid container spacing={3}>
+        <Box component="form" onSubmit={handleSubmit} noValidate>
+          <Grid container spacing={2.5}>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Full Name"
+                id="reg-full-name"
+                label={t('auth.fullName')}
                 name="full_name"
                 value={formData.full_name}
                 onChange={handleChange}
                 required
-                variant="outlined"
-                sx={{ backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 1 }}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Username"
+                id="reg-username"
+                label={t('auth.username')}
                 name="username"
+                autoComplete="username"
                 value={formData.username}
                 onChange={handleChange}
                 required
-                variant="outlined"
-                sx={{ backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 1 }}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Email"
+                id="reg-email"
+                label={t('auth.email')}
                 name="email"
                 type="email"
+                autoComplete="email"
                 value={formData.email}
                 onChange={handleChange}
                 required
-                variant="outlined"
-                sx={{ backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 1 }}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="School Name"
+                id="reg-school"
+                label={t('auth.schoolName')}
                 name="school_name"
                 value={formData.school_name}
                 onChange={handleChange}
-                variant="outlined"
-                sx={{ backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 1 }}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Class/Grade"
+                id="reg-grade"
+                label={t('auth.classGrade')}
                 name="class_grade"
                 value={formData.class_grade}
                 onChange={handleChange}
-                variant="outlined"
-                sx={{ backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 1 }}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Password"
+                id="reg-password"
+                label={t('auth.password')}
                 name="password"
                 type="password"
+                autoComplete="new-password"
                 value={formData.password}
                 onChange={handleChange}
                 required
-                variant="outlined"
-                sx={{ backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 1 }}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Confirm Password"
+                id="reg-confirm-password"
+                label={t('auth.confirmPassword')}
                 name="confirmPassword"
                 type="password"
+                autoComplete="new-password"
                 value={formData.confirmPassword}
                 onChange={handleChange}
                 required
-                variant="outlined"
-                sx={{ backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 1 }}
               />
             </Grid>
           </Grid>
@@ -173,28 +195,18 @@ const Register = () => {
             fullWidth
             variant="contained"
             size="large"
-            sx={{
-              mt: 5,
-              mb: 3,
-              py: 1.5,
-              borderRadius: 2,
-              background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
-              fontWeight: 'bold',
-              textTransform: 'none',
-              fontSize: '1rem'
-            }}
             disabled={loading}
-            className="hover-glow"
+            sx={{ mt: 4, mb: 2.5, py: 1.4, fontWeight: 700, textTransform: 'none', fontSize: '1rem' }}
           >
-            {loading ? <CircularProgress size={24} color="inherit" /> : 'Create Account'}
+            {loading ? <CircularProgress size={22} color="inherit" /> : t('auth.createAccountBtn')}
           </Button>
         </Box>
 
         <Box textAlign="center">
           <Typography variant="body2" color="text.secondary">
-            Already have an account?{' '}
-            <Link to="/login" style={{ textDecoration: 'none', fontWeight: 'bold' }}>
-              <span className="gradient-text">Login here</span>
+            {t('auth.haveAccount')}{' '}
+            <Link to="/login" style={{ fontWeight: 700, color: '#1d4ed8', textDecoration: 'underline' }}>
+              {t('auth.loginHere')}
             </Link>
           </Typography>
         </Box>
@@ -204,4 +216,3 @@ const Register = () => {
 };
 
 export default Register;
-

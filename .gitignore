@@ -1,6 +1,16 @@
+node_modules/
+client/node_modules/
+server/node_modules/
+client/build/
 server/database/*.sqlite
 server/database/*.sqlite-*
 server/uploads/
+server/backups/
+server/logs/
 .env
 .env.*
+!.env.example
 *.log
+test-results/
+playwright-report/
+Digital_Learning_Platform_Rural_Schools_Complete.zip

@@ -1,24 +1,40 @@
 {
   "name": "digital-learning-platform",
-  "version": "1.0.0",
-  "description": "Digital Learning Platform for Rural Schools in Nabha",
+  "version": "1.1.0",
+  "description": "Digital Learning Platform for Rural Schools",
   "main": "server/index.js",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "cd server && npm run dev",
     "client": "cd client && npm start",
+    "start": "cd server && npm start",
     "install-all": "npm install && cd server && npm install && cd ../client && npm install",
-    "build": "cd client && npm run build"
+    "build": "cd client && npm run build",
+    "migrate": "cd server && npm run migrate",
+    "seed": "cd server && npm run seed:safe",
+    "seed:reset": "cd server && npm run seed:reset",
+    "backup": "cd server && npm run backup",
+    "restore": "cd server && npm run restore",
+    "test": "cd server && npm test && cd ../client && npm test",
+    "test:server": "cd server && npm test",
+    "test:client": "cd client && npm test",
+    "test:e2e": "npm run build && npx playwright test",
+    "test:all": "npm test && npm run test:e2e"
   },
   "keywords": [
     "education",
     "rural",
     "learning",
-    "digital"
+    "digital",
+    "offline-first",
+    "multilingual"
   ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "concurrently": "8.2.2"
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.64.1",
+    "@sparticuz/chromium": "^153.0.0",
+    "concurrently": "^8.2.2"
   }
 }

@@ -1,277 +1,399 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
-    Container,
-    Typography,
-    Box,
-    TextField,
-    Button,
-    Card,
-    CardContent,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    Alert,
-    CircularProgress,
-    FormControlLabel,
-    Switch
+  Container,
+  Typography,
+  Box,
+  TextField,
+  Button,
+  Paper,
+  MenuItem,
+  Alert,
+  Skeleton,
+  Grid,
+  List,
+  ListItem,
+  ListItemText,
+  IconButton,
+  Stack,
+  Divider,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
-import { ArrowBack, Edit, AddCircle, Delete, PlayCircle } from '@mui/icons-material';
-import { useNavigate, useParams } from 'react-router-dom';
+import {
+  ArrowBack,
+  Save,
+  Add,
+  Edit,
+  Delete,
+  ArrowUpward,
+  ArrowDownward,
+  ExpandMore,
+  Translate,
+} from '@mui/icons-material';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import ConfirmDialog from '../components/ConfirmDialog';
+
+const CATEGORIES = [
+  'Digital Literacy',
+  'Computer Science',
+  'Mathematics',
+  'Science',
+  'Language',
+  'Vocational',
+  'Office Applications',
+  'Digital Communication',
+];
 
 const EditCourse = () => {
-    const { id } = useParams();
-    const navigate = useNavigate();
-    const [formData, setFormData] = useState({
-        title: '',
-        description: '',
-        category: '',
-        language: '',
-        thumbnail_url: '',
-        is_active: true
-    });
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState('');
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { showToast } = useToast();
 
-    useEffect(() => {
-        fetchCourse();
-        // eslint-disable-next-line
-    }, [id]);
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    category: 'Digital Literacy',
+    language: 'en',
+    thumbnail_url: '',
+  });
+  const [teTrans, setTeTrans] = useState({ title: '', description: '' });
+  const [hiTrans, setHiTrans] = useState({ title: '', description: '' });
+  const [lessons, setLessons] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [deleteLessonTarget, setDeleteLessonTarget] = useState(null);
 
-    const fetchCourse = async () => {
-        try {
-            const response = await axios.get(`/api/courses/${id}`);
-            const course = response.data.course;
-            setFormData({
-                title: course.title,
-                description: course.description || '',
-                category: course.category || '',
-                language: course.language || 'english',
-                thumbnail_url: course.thumbnail_url || '',
-                is_active: course.is_active
-            });
-            setLoading(false);
-        } catch (err) {
-            console.error('Error fetching course:', err);
-            setError('Failed to load course details');
-            setLoading(false);
-        }
-    };
+  const dashboardBackPath = user?.role === 'admin' ? '/admin' : '/teacher';
 
-    const handleChange = (e) => {
-        const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-        setFormData({
-            ...formData,
-            [e.target.name]: value
-        });
-    };
+  const fetchCourse = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get(`/api/courses/${id}`);
+      const course = response.data.course;
+      setFormData({
+        title: course.title || '',
+        description: course.description || '',
+        category: course.category || 'Digital Literacy',
+        language: course.language || 'en',
+        thumbnail_url: course.thumbnail_url || '',
+      });
+      setLessons(course.lessons || []);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setSaving(true);
-        setError('');
-
-        try {
-            await axios.put(`/api/courses/${id}`, formData);
-            navigate('/admin'); // Redirect back to dashboard on success
-        } catch (err) {
-            setError(err.response?.data?.message || 'Failed to update course');
-            setSaving(false);
-        }
-    };
-
-    if (loading) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
-                <CircularProgress />
-            </Box>
-        );
+      const trMap = course.translations || {};
+      if (trMap.te) setTeTrans({ title: trMap.te.title || '', description: trMap.te.description || '' });
+      if (trMap.hi) setHiTrans({ title: trMap.hi.title || '', description: trMap.hi.description || '' });
+    } catch (_err) {
+      setError('Failed to load course details.');
+    } finally {
+      setLoading(false);
     }
+  }, [id]);
 
+  useEffect(() => {
+    fetchCourse();
+  }, [fetchCourse]);
+
+  const handleChange = (e) => {
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSaving(true);
+    try {
+      const translations = {};
+      if (teTrans.title.trim()) {
+        translations.te = { title: teTrans.title.trim(), description: teTrans.description.trim() };
+      }
+      if (hiTrans.title.trim()) {
+        translations.hi = { title: hiTrans.title.trim(), description: hiTrans.description.trim() };
+      }
+
+      await axios.put(`/api/courses/${id}`, {
+        ...formData,
+        translations: Object.keys(translations).length ? translations : undefined,
+      });
+      showToast('Course updated successfully!', 'success');
+      fetchCourse();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Error updating course');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleMoveLesson = async (index, direction) => {
+    const targetIdx = index + direction;
+    if (targetIdx < 0 || targetIdx >= lessons.length) return;
+    const reordered = [...lessons];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(targetIdx, 0, moved);
+    setLessons(reordered);
+
+    try {
+      await Promise.all(
+        reordered.map((l, idx) => axios.put(`/api/lessons/${l.id}`, { order_index: idx + 1 }))
+      );
+      showToast('Lesson order saved.', 'info');
+    } catch (_e) {
+      showToast('Could not save lesson order.', 'error');
+      fetchCourse();
+    }
+  };
+
+  const handleDeleteLesson = async () => {
+    if (!deleteLessonTarget) return;
+    try {
+      await axios.delete(`/api/lessons/${deleteLessonTarget.id}`);
+      showToast('Lesson deleted.', 'info');
+      setDeleteLessonTarget(null);
+      fetchCourse();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to delete lesson', 'error');
+    }
+  };
+
+  if (loading) {
     return (
-        <Container maxWidth="md" sx={{ py: 8 }}>
-            <Button
-                startIcon={<ArrowBack />}
-                onClick={() => navigate('/admin')}
-                sx={{ mb: 4 }}
-            >
-                Back to Dashboard
-            </Button>
-
-            <Card className="glass-panel" sx={{ mb: 6 }}>
-                <CardContent sx={{ p: 4 }}>
-                    <Box sx={{ mb: 4, textAlign: 'center' }}>
-                        <Box sx={{
-                            display: 'inline-flex',
-                            p: 2,
-                            borderRadius: '50%',
-                            bgcolor: 'rgba(102, 126, 234, 0.1)',
-                            mb: 2
-                        }}>
-                            <Edit sx={{ fontSize: 40, color: '#667eea' }} />
-                        </Box>
-                        <Typography variant="h4" component="h1" fontWeight="bold">
-                            Edit Course
-                        </Typography>
-                        <Typography color="text.secondary">
-                            Update course details
-                        </Typography>
-                    </Box>
-
-                    {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-
-                    <form onSubmit={handleSubmit}>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            <TextField
-                                label="Course Title"
-                                name="title"
-                                value={formData.title}
-                                onChange={handleChange}
-                                required
-                                fullWidth
-                            />
-
-                            <TextField
-                                label="Description"
-                                name="description"
-                                value={formData.description}
-                                onChange={handleChange}
-                                multiline
-                                rows={4}
-                                required
-                                fullWidth
-                            />
-
-                            <Box sx={{ display: 'flex', gap: 2 }}>
-                                <FormControl fullWidth>
-                                    <InputLabel>Category</InputLabel>
-                                    <Select
-                                        name="category"
-                                        value={formData.category}
-                                        label="Category"
-                                        onChange={handleChange}
-                                        required
-                                    >
-                                        <MenuItem value="Digital Literacy">Digital Literacy</MenuItem>
-                                        <MenuItem value="Language">Language</MenuItem>
-                                        <MenuItem value="Mathematics">Mathematics</MenuItem>
-                                        <MenuItem value="Science">Science</MenuItem>
-                                        <MenuItem value="Vocational">Vocational</MenuItem>
-                                        <MenuItem value="Other">Other</MenuItem>
-                                    </Select>
-                                </FormControl>
-
-                                <FormControl fullWidth>
-                                    <InputLabel>Language</InputLabel>
-                                    <Select
-                                        name="language"
-                                        value={formData.language}
-                                        label="Language"
-                                        onChange={handleChange}
-                                    >
-                                        <MenuItem value="english">English</MenuItem>
-                                        <MenuItem value="hindi">Hindi</MenuItem>
-                                        <MenuItem value="regional">Regional</MenuItem>
-                                    </Select>
-                                </FormControl>
-                            </Box>
-
-                            <TextField
-                                label="Thumbnail URL (Optional)"
-                                name="thumbnail_url"
-                                value={formData.thumbnail_url}
-                                onChange={handleChange}
-                                fullWidth
-                                helperText="Link to an image for the course card"
-                            />
-
-                            <FormControlLabel
-                                control={
-                                    <Switch
-                                        checked={formData.is_active}
-                                        onChange={handleChange}
-                                        name="is_active"
-                                        color="primary"
-                                    />
-                                }
-                                label="Active Course"
-                            />
-
-                            <Button
-                                type="submit"
-                                variant="contained"
-                                size="large"
-                                disabled={saving}
-                                sx={{
-                                    mt: 2,
-                                    py: 1.5,
-                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                    fontWeight: 'bold'
-                                }}
-                            >
-                                {saving ? <CircularProgress size={24} color="inherit" /> : 'Update Course Details'}
-                            </Button>
-                        </Box>
-                    </form>
-                </CardContent>
-            </Card>
-
-            {/* Lesson Management Section */}
-            <Card className="glass-panel">
-                <CardContent sx={{ p: 4 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                        <Typography variant="h5" component="h2" fontWeight="bold">
-                            Course Modules (Lessons)
-                        </Typography>
-                        <Button
-                            variant="outlined"
-                            startIcon={<AddCircle />}
-                            onClick={() => navigate(`/admin/courses/${id}/lessons/add`)}
-                            sx={{
-                                border: '2px solid',
-                                fontWeight: 'bold',
-                                ':hover': { border: '2px solid' }
-                            }}
-                        >
-                            Add Lesson
-                        </Button>
-                    </Box>
-
-                    {/* Lesson List Logic would go here. For now, we show a state where we can add content. */}
-                    {/* In a continued implementation, we would fetch lessons from /api/lessons?course_id={id} */}
-
-                    <Box sx={{
-                        p: 4,
-                        textAlign: 'center',
-                        border: '2px dashed rgba(102, 126, 234, 0.3)',
-                        borderRadius: 4,
-                        bgcolor: 'rgba(255,255,255,0.3)',
-                        transition: '0.3s',
-                        ':hover': { bgcolor: 'rgba(255,255,255,0.5)', borderColor: '#667eea' }
-                    }}>
-                        <Typography color="text.secondary" sx={{ mb: 2, fontWeight: 500 }}>
-                            Manage your course content here.
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                            Add video lessons, text articles, and quizzes to structure your course.
-                        </Typography>
-                        <Button
-                            variant="contained"
-                            size="large"
-                            onClick={() => navigate(`/admin/courses/${id}/lessons/add`)}
-                            className="hover-glow"
-                            startIcon={<AddCircle />}
-                            sx={{ borderRadius: '50px', px: 4 }}
-                        >
-                            Create First Module
-                        </Button>
-                    </Box>
-                </CardContent>
-            </Card>
-        </Container>
+      <Container maxWidth="md" sx={{ py: 5 }}>
+        <Skeleton variant="rounded" height={380} />
+      </Container>
     );
+  }
+
+  return (
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      <Stack direction="row" justifyContent="space-between" mb={2}>
+        <Button startIcon={<ArrowBack />} onClick={() => navigate(dashboardBackPath)}>
+          Back to Dashboard
+        </Button>
+        <Button variant="outlined" component={Link} to={`/courses/${id}`}>
+          View Live Course
+        </Button>
+      </Stack>
+
+      <Paper className="glass-panel" sx={{ p: { xs: 3, sm: 4 }, mb: 4 }}>
+        <Typography variant="h4" component="h1" fontWeight={800} gutterBottom>
+          Edit Course
+        </Typography>
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {error}
+          </Alert>
+        )}
+
+        <Box component="form" onSubmit={handleSubmit}>
+          <Grid container spacing={2.5}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Course Title"
+                name="title"
+                value={formData.title}
+                onChange={handleChange}
+                required
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Course Description"
+                name="description"
+                value={formData.description}
+                onChange={handleChange}
+                multiline
+                rows={4}
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                select
+                fullWidth
+                label="Category"
+                name="category"
+                value={formData.category}
+                onChange={handleChange}
+              >
+                {CATEGORIES.map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                select
+                fullWidth
+                label="Primary Language"
+                name="language"
+                value={formData.language}
+                onChange={handleChange}
+              >
+                <MenuItem value="en">English (en)</MenuItem>
+                <MenuItem value="te">తెలుగు / Telugu (te)</MenuItem>
+                <MenuItem value="hi">हिन्दी / Hindi (hi)</MenuItem>
+              </TextField>
+            </Grid>
+
+            <Grid item xs={12}>
+              <Accordion variant="outlined">
+                <AccordionSummary expandIcon={<ExpandMore />}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Translate color="primary" fontSize="small" />
+                    <Typography fontWeight={700}>
+                      Multilingual Course Translations (Telugu / Hindi)
+                    </Typography>
+                  </Stack>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Telugu Title"
+                        value={teTrans.title}
+                        onChange={(e) => setTeTrans((p) => ({ ...p, title: e.target.value }))}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Hindi Title"
+                        value={hiTrans.title}
+                        onChange={(e) => setHiTrans((p) => ({ ...p, title: e.target.value }))}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        multiline
+                        rows={2}
+                        label="Telugu Description"
+                        value={teTrans.description}
+                        onChange={(e) => setTeTrans((p) => ({ ...p, description: e.target.value }))}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        multiline
+                        rows={2}
+                        label="Hindi Description"
+                        value={hiTrans.description}
+                        onChange={(e) => setHiTrans((p) => ({ ...p, description: e.target.value }))}
+                      />
+                    </Grid>
+                  </Grid>
+                </AccordionDetails>
+              </Accordion>
+            </Grid>
+          </Grid>
+
+          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button type="submit" variant="contained" startIcon={<Save />} disabled={saving}>
+              {saving ? 'Saving...' : 'Save Course Changes'}
+            </Button>
+          </Box>
+        </Box>
+      </Paper>
+
+      <Paper className="glass-panel" sx={{ p: { xs: 3, sm: 4 } }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+          <Typography variant="h5" fontWeight={800}>
+            Course Lessons ({lessons.length})
+          </Typography>
+          <Button
+            variant="contained"
+            size="small"
+            component={Link}
+            to={`/teacher/courses/${id}/lessons/add`}
+            startIcon={<Add />}
+          >
+            Add Lesson
+          </Button>
+        </Stack>
+        <Divider sx={{ mb: 1 }} />
+
+        {lessons.length === 0 ? (
+          <Typography color="text.secondary" sx={{ py: 2 }}>
+            No lessons added to this course yet.
+          </Typography>
+        ) : (
+          <List disablePadding>
+            {lessons.map((lesson, idx) => (
+              <ListItem
+                key={lesson.id}
+                divider={idx < lessons.length - 1}
+                sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}
+              >
+                <ListItemText
+                  primary={`${idx + 1}. ${lesson.title}`}
+                  secondary={`Type: ${(lesson.lesson_type || 'text').toUpperCase()} • ${lesson.duration_minutes || 0} min`}
+                />
+                <Stack direction="row" spacing={0.5}>
+                  <IconButton
+                    size="small"
+                    disabled={idx === 0}
+                    aria-label="Move lesson up"
+                    onClick={() => handleMoveLesson(idx, -1)}
+                  >
+                    <ArrowUpward fontSize="small" />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    disabled={idx === lessons.length - 1}
+                    aria-label="Move lesson down"
+                    onClick={() => handleMoveLesson(idx, 1)}
+                  >
+                    <ArrowDownward fontSize="small" />
+                  </IconButton>
+                  <Button
+                    size="small"
+                    component={Link}
+                    to={`/teacher/lessons/edit/${lesson.id}`}
+                    startIcon={<Edit />}
+                  >
+                    Edit
+                  </Button>
+                  <IconButton
+                    color="error"
+                    size="small"
+                    aria-label={`Delete lesson ${lesson.title}`}
+                    onClick={() => setDeleteLessonTarget(lesson)}
+                  >
+                    <Delete fontSize="small" />
+                  </IconButton>
+                </Stack>
+              </ListItem>
+            ))}
+          </List>
+        )}
+      </Paper>
+
+      <ConfirmDialog
+        open={Boolean(deleteLessonTarget)}
+        title="Delete Lesson?"
+        message={`Are you sure you want to delete lesson "${deleteLessonTarget?.title}"?`}
+        confirmLabel="Delete"
+        onConfirm={handleDeleteLesson}
+        onCancel={() => setDeleteLessonTarget(null)}
+      />
+    </Container>
+  );
 };
 
 export default EditCourse;

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container,
   Typography,
@@ -7,472 +7,559 @@ import {
   Card,
   CardContent,
   Button,
-  CircularProgress,
-  LinearProgress,
+  Skeleton,
   Alert,
-  Paper,
+  Radio,
   RadioGroup,
   FormControlLabel,
-  Radio,
-  Divider,
+  FormControl,
+  FormLabel,
+  Paper,
+  Chip,
+  Stack,
+  LinearProgress,
 } from '@mui/material';
 import {
   ArrowBack,
-  ArrowForward,
   CheckCircle,
-
-
+  Download,
+  CloudDownload,
+  OfflinePin,
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-
-const getYoutubeEmbedUrl = (value) => {
-  if (!value) return null;
-  try {
-    const parsed = new URL(value);
-    const host = parsed.hostname.toLowerCase();
-    let videoId = null;
-    if (host === 'youtu.be' || host.endsWith('.youtu.be')) {
-      videoId = parsed.pathname.split('/').filter(Boolean)[0];
-    } else if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
-      if (parsed.pathname === '/watch') videoId = parsed.searchParams.get('v');
-      else if (parsed.pathname.startsWith('/embed/')) videoId = parsed.pathname.split('/')[2];
-      else if (parsed.pathname.startsWith('/shorts/')) videoId = parsed.pathname.split('/')[2];
-    }
-    return videoId && /^[A-Za-z0-9_-]{11}$/.test(videoId)
-      ? `https://www.youtube.com/embed/${videoId}`
-      : null;
-  } catch (_error) {
-    return null;
-  }
-};
+import { useLanguage } from '../context/LanguageContext';
+import { usePreferences } from '../context/PreferencesContext';
+import { useOffline } from '../context/OfflineContext';
+import { useToast } from '../context/ToastContext';
+import { resolveEntityTranslation, getLanguageDisplayName } from '../i18n/translations';
+import AudioLessonPlayer from '../components/AudioLessonPlayer';
+import {
+  cacheOpenedLesson,
+  getOfflineLesson,
+  getOfflineProgressForUser,
+  recordLessonProgressWithOfflineSupport,
+  getOfflineMediaObjectUrl,
+  hasOfflineMedia,
+  saveMediaBlobOffline,
+} from '../services/offlineDb';
 
 const LessonDetail = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
+  const { language, t } = useLanguage();
+  const { lowBandwidthMode } = usePreferences();
+  const { isOffline, refreshOfflineStatus } = useOffline();
+  const { showToast } = useToast();
 
   const [lesson, setLesson] = useState(null);
-  const [course, setCourse] = useState(null);
   const [progress, setProgress] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [progressValue, setProgressValue] = useState(0);
-  const [answers, setAnswers] = useState({});
-  const [assessmentResults, setAssessmentResults] = useState({});
-  const [submittingAssessment, setSubmittingAssessment] = useState({});
-  const [offlineMode, setOfflineMode] = useState(typeof navigator !== 'undefined' && !navigator.onLine);
-  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [inlineAnswers, setInlineAnswers] = useState({});
+  const [inlineResults, setInlineResults] = useState({});
 
-  useEffect(() => {
-    fetchLessonData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  const [videoOfflineUrl, setVideoOfflineUrl] = useState(null);
+  const [pdfOfflineUrl, setPdfOfflineUrl] = useState(null);
+  const [imageOfflineUrl, setImageOfflineUrl] = useState(null);
+  const [videoSavedOffline, setVideoSavedOffline] = useState(false);
+  const [pdfSavedOffline, setPdfSavedOffline] = useState(false);
+  const [savingMediaPct, setSavingMediaPct] = useState(null);
+  const [videoLoadApproved, setVideoLoadApproved] = useState(!lowBandwidthMode);
 
-  useEffect(() => {
-    if (!lesson || progress?.completion_status === 'completed') return undefined;
-    let elapsedSeconds = 0;
-    const timer = window.setInterval(() => {
-      elapsedSeconds += 1;
-      if (elapsedSeconds >= 60) {
-        elapsedSeconds = 0;
-        saveProgress('in_progress', Math.max(progressValue, 1), 1);
-      }
-    }, 1000);
-    return () => window.clearInterval(timer);
-    // The timer is intentionally restarted when the lesson changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lesson?.id, progress?.completion_status, progressValue]);
+  const studyStartRef = useRef(Date.now());
 
-  const offlineLessonStorageKey = `rural-learning-lessons-${user?.id || 'guest'}`;
-  const pendingProgressStorageKey = `rural-learning-progress-${user?.id || 'guest'}`;
-
-  const fetchLessonData = async () => {
+  const loadLesson = useCallback(async () => {
     setLoading(true);
-    setLesson(null);
-    setCourse(null);
-    setProgress(null);
-    setProgressValue(0);
-    setAssessmentResults({});
-    setAnswers({});
+    studyStartRef.current = Date.now();
     try {
       const lessonRes = await axios.get(`/api/lessons/${id}`);
       const lessonData = lessonRes.data.lesson;
-      const courseRes = await axios.get(`/api/courses/${lessonData.course_id}`);
-      const courseData = courseRes.data.course;
       setLesson(lessonData);
-      setCourse(courseData);
-      setOfflineMode(false);
 
-      // Cache text, metadata and safe assessment choices for lessons already opened online.
-      try {
-        const cached = JSON.parse(localStorage.getItem(offlineLessonStorageKey) || '{}');
-        cached[String(id)] = { lesson: lessonData, course: courseData, cachedAt: Date.now() };
-        localStorage.setItem(offlineLessonStorageKey, JSON.stringify(cached));
-      } catch (storageError) {
-        console.warn('Unable to cache lesson for offline use:', storageError);
+      if (user?.id) {
+        await cacheOpenedLesson(user.id, lessonData, null).catch(() => {});
       }
 
-      const progressRes = await axios.get('/api/progress', { params: { lesson_id: id } });
-      if (progressRes.data.progress.length > 0) {
-        const lessonProgress = progressRes.data.progress[0];
-        setProgress(lessonProgress);
-        setProgressValue(lessonProgress.progress_percentage);
-      }
-    } catch (error) {
-      if (error.response && [401, 403, 404].includes(error.response.status)) {
-        setLesson(null);
-        return;
-      }
-      console.warn('Network request failed; checking cached lesson:', error.message);
-      try {
-        const cached = JSON.parse(localStorage.getItem(offlineLessonStorageKey) || '{}');
-        const savedLesson = cached[String(id)];
-        if (savedLesson) {
-          setLesson(savedLesson.lesson);
-          setCourse(savedLesson.course);
-          setOfflineMode(true);
-          const queued = JSON.parse(localStorage.getItem(pendingProgressStorageKey) || '[]');
-          setPendingSyncCount(queued.length);
+      const progRes = await axios.get('/api/progress', {
+        params: { course_id: lessonData.course_id, lesson_id: id },
+      });
+      const lp = (progRes.data.progress || [])[0] || null;
+      if (lp) setProgress(lp);
+    } catch (_err) {
+      if (user?.id) {
+        const cachedLesson = await getOfflineLesson(user.id, Number(id));
+        if (cachedLesson) {
+          setLesson(cachedLesson);
+          const offlineProg = await getOfflineProgressForUser(user.id, {
+            courseId: cachedLesson.course_id,
+            lessonId: Number(id),
+          });
+          if (offlineProg[0]) setProgress(offlineProg[0]);
         } else {
           setLesson(null);
         }
-      } catch (storageError) {
-        console.error('Unable to load offline lesson:', storageError);
-        setLesson(null);
       }
     } finally {
       setLoading(false);
     }
-  };
-
+  }, [id, user?.id]);
 
   useEffect(() => {
-    const handleOnline = () => setOfflineMode(false);
-    const handleOffline = () => setOfflineMode(true);
-    const handleProgressSynced = () => {
-      try {
-        const queued = JSON.parse(localStorage.getItem(pendingProgressStorageKey) || '[]');
-        setPendingSyncCount(queued.length);
-      } catch (_error) {
-        setPendingSyncCount(0);
-      }
-    };
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    window.addEventListener('rural-learning-progress-synced', handleProgressSynced);
-    try {
-      const queued = JSON.parse(localStorage.getItem(pendingProgressStorageKey) || '[]');
-      setPendingSyncCount(queued.length);
-    } catch (_error) {
-      setPendingSyncCount(0);
-    }
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-      window.removeEventListener('rural-learning-progress-synced', handleProgressSynced);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+    loadLesson();
+  }, [loadLesson]);
 
-  const saveProgress = async (status, percentage, minutesSpent = 0) => {
-    if (!lesson || !course) return;
-
-    try {
-      setSaving(true);
-      const response = await axios.post('/api/progress', {
-        course_id: lesson.course_id,
-        lesson_id: lesson.id,
-        completion_status: status,
-        progress_percentage: percentage,
-        time_spent_minutes: minutesSpent,
-      });
-      setProgress(response.data.progress);
-      return true;
-    } catch (error) {
-      if (!navigator.onLine || !error.response) {
-        const payload = {
-          course_id: lesson.course_id,
-          lesson_id: lesson.id,
-          completion_status: status,
-          progress_percentage: percentage,
-          time_spent_minutes: minutesSpent,
-        };
-        try {
-          const queued = JSON.parse(localStorage.getItem(pendingProgressStorageKey) || '[]');
-          queued.push(payload);
-          localStorage.setItem(pendingProgressStorageKey, JSON.stringify(queued));
-          setPendingSyncCount(queued.length);
-          setOfflineMode(true);
-          setProgress({ ...(progress || {}), completion_status: status, progress_percentage: percentage });
-          return true;
-        } catch (storageError) {
-          console.error('Unable to queue offline progress:', storageError);
+  useEffect(() => {
+    let active = true;
+    const loadOfflineBlobs = async () => {
+      if (!user?.id || !lesson) return;
+      if (lesson.video_url) {
+        const hasVid = await hasOfflineMedia(user.id, lesson.video_url);
+        if (active) setVideoSavedOffline(hasVid);
+        if (hasVid) {
+          const u = await getOfflineMediaObjectUrl(user.id, lesson.video_url);
+          if (active && u) {
+            setVideoOfflineUrl(u);
+            setVideoLoadApproved(true);
+          }
         }
       }
-      console.error('Error saving progress:', error);
-      return false;
-    } finally {
-      setSaving(false);
+      if (lesson.pdf_url) {
+        const hasPdf = await hasOfflineMedia(user.id, lesson.pdf_url);
+        if (active) setPdfSavedOffline(hasPdf);
+        if (hasPdf) {
+          const u = await getOfflineMediaObjectUrl(user.id, lesson.pdf_url);
+          if (active && u) setPdfOfflineUrl(u);
+        }
+      }
+      if (lesson.image_url) {
+        const hasImg = await hasOfflineMedia(user.id, lesson.image_url);
+        if (hasImg) {
+          const u = await getOfflineMediaObjectUrl(user.id, lesson.image_url);
+          if (active && u) setImageOfflineUrl(u);
+        }
+      }
+    };
+    loadOfflineBlobs();
+    return () => {
+      active = false;
+    };
+  }, [lesson, user?.id]);
+
+  const getElapsedMinutes = () => {
+    const secs = Math.max(30, Math.round((Date.now() - studyStartRef.current) / 1000));
+    studyStartRef.current = Date.now();
+    return Math.min(240, Math.max(1, Math.round(secs / 60)));
+  };
+
+  const persistProgress = async (status, progressPct = null, lastPos = null) => {
+    if (!user?.id || !lesson || user?.role !== 'student') return;
+    const result = await recordLessonProgressWithOfflineSupport(user.id, {
+      lesson_id: Number(id),
+      course_id: Number(lesson.course_id),
+      completion_status: status,
+      progress_percentage: progressPct ?? (status === 'completed' ? 100 : 50),
+      time_spent_minutes: getElapsedMinutes(),
+      last_position_seconds: lastPos ?? 0,
+    });
+    setProgress(result.progress);
+    await refreshOfflineStatus();
+    if (result.queuedOffline) {
+      showToast('Progress saved offline and queued for automatic sync.', 'info');
+    } else if (status === 'completed') {
+      showToast(t('lesson.completedAlert'), 'success');
     }
   };
 
-  const handleComplete = async () => {
-    const saved = await saveProgress('completed', 100);
-    if (saved) setProgressValue(100);
-  };
-
-  const submitAssessment = async (assessmentId) => {
-    if (answers[assessmentId] === undefined || answers[assessmentId] === '') return;
-    setSubmittingAssessment((current) => ({ ...current, [assessmentId]: true }));
+  const handleSaveAssetOffline = async (canonicalUrl, signedUrl, type) => {
+    if (!user?.id || !canonicalUrl) return;
+    setSavingMediaPct(2);
     try {
-      const response = await axios.post(`/api/assessments/${assessmentId}/submit`, {
-        selected_answer: Number(answers[assessmentId]),
+      await saveMediaBlobOffline(user.id, {
+        canonicalUrl,
+        downloadUrl: signedUrl || canonicalUrl,
+        courseId: lesson.course_id,
+        lessonId: lesson.id,
+        onProgress: (pct) => setSavingMediaPct(pct),
       });
-      setAssessmentResults((current) => ({ ...current, [assessmentId]: response.data }));
-    } catch (error) {
-      setAssessmentResults((current) => ({
-        ...current,
-        [assessmentId]: { success: false, message: error.response?.data?.message || 'Assessment submission requires an internet connection.' },
-      }));
+      const objUrl = await getOfflineMediaObjectUrl(user.id, canonicalUrl);
+      if (type === 'video') {
+        setVideoSavedOffline(true);
+        if (objUrl) setVideoOfflineUrl(objUrl);
+        setVideoLoadApproved(true);
+      } else if (type === 'pdf') {
+        setPdfSavedOffline(true);
+        if (objUrl) setPdfOfflineUrl(objUrl);
+      }
+      showToast('Saved for offline access!', 'success');
+    } catch (_e) {
+      showToast('Could not download file for offline use.', 'error');
     } finally {
-      setSubmittingAssessment((current) => ({ ...current, [assessmentId]: false }));
+      setSavingMediaPct(null);
     }
   };
 
-  const getAssessmentOptions = (assessment) => {
+  const handleCheckInlineQuestion = async (assessment) => {
+    const selected = inlineAnswers[assessment.id];
+    if (selected === undefined) return;
     try {
-      const options = typeof assessment.options === 'string' ? JSON.parse(assessment.options) : assessment.options;
-      return Array.isArray(options) ? options : [];
-    } catch (_error) {
-      return [];
+      const res = await axios.post(`/api/assessments/${assessment.id}/submit`, {
+        user_answer: Number(selected),
+      });
+      setInlineResults((prev) => ({ ...prev, [assessment.id]: res.data }));
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Unable to submit answer right now.', 'warning');
     }
-  };
-
-  const getNextLesson = () => {
-    if (!course || !lesson) return null;
-    const currentIndex = course.lessons.findIndex((l) => l.id === lesson.id);
-    return currentIndex < course.lessons.length - 1 ? course.lessons[currentIndex + 1] : null;
-  };
-
-  const getPrevLesson = () => {
-    if (!course || !lesson) return null;
-    const currentIndex = course.lessons.findIndex((l) => l.id === lesson.id);
-    return currentIndex > 0 ? course.lessons[currentIndex - 1] : null;
   };
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
-        <CircularProgress />
-      </Box>
+      <Container maxWidth="md" sx={{ py: 5 }}>
+        <Skeleton variant="text" width={160} height={36} sx={{ mb: 2 }} />
+        <Skeleton variant="rounded" height={340} />
+      </Container>
     );
   }
 
   if (!lesson) {
     return (
-      <Container>
-        <Alert severity="error">Lesson not found</Alert>
+      <Container maxWidth="md" sx={{ py: 5 }}>
+        <Card className="glass-panel" sx={{ p: 4, textAlign: 'center' }}>
+          <Typography variant="h6" gutterBottom>
+            {isOffline
+              ? 'This lesson is not cached offline yet. Connect to the internet and save the course first.'
+              : 'Lesson not found.'}
+          </Typography>
+          <Button variant="contained" onClick={() => navigate('/courses')} sx={{ mt: 2 }}>
+            {t('courses.backToCourses')}
+          </Button>
+        </Card>
       </Container>
     );
   }
 
-  const nextLesson = getNextLesson();
-  const prevLesson = getPrevLesson();
-  const isCompleted = progress?.completion_status === 'completed';
-  const youtubeEmbedUrl = getYoutubeEmbedUrl(lesson.video_url);
-  const isDirectVideo = Boolean(lesson.video_url && (lesson.video_url.startsWith('/uploads/videos/') || /\.(mp4|webm|mov|ogv|ogg|mpeg|mpg)(?:[?#]|$)/i.test(lesson.video_url)));
+  const localized = resolveEntityTranslation(lesson, language);
+  const inlineAssessments = (lesson.assessments || []).map((a) => ({
+    ...a,
+    parsedOptions: typeof a.options === 'string' ? JSON.parse(a.options) : a.options || [],
+  }));
+  const lType = lesson.lesson_type || lesson.content_type || 'text';
+  const durationMins = lesson.duration_minutes ?? lesson.duration ?? 0;
+
+  const videoSrc = videoOfflineUrl || lesson.video_url_signed || lesson.video_url;
+  const pdfSrc = pdfOfflineUrl || lesson.pdf_url_signed || lesson.pdf_url;
+  const imgSrc = imageOfflineUrl || lesson.image_url_signed || lesson.image_url;
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
-      {offlineMode && (
-        <Alert severity="warning" sx={{ mb: 2 }}>You are offline. This previously opened lesson is available from this device. Video playback may require an internet connection.</Alert>
-      )}
-      {pendingSyncCount > 0 && (
-        <Alert severity="info" sx={{ mb: 2 }}>{pendingSyncCount} progress update(s) are saved on this device and will sync when you reconnect.</Alert>
-      )}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-        <Button
-          startIcon={<ArrowBack />}
-          component={Link}
-          to={`/courses/${lesson.course_id}`}
-        >
-          Back to Course
-        </Button>
-        {saving && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <CircularProgress size={20} />
-            <Typography variant="body2" color="text.secondary">
-              Saving...
-            </Typography>
-          </Box>
-        )}
-      </Box>
+      <Button
+        startIcon={<ArrowBack />}
+        onClick={() => navigate(`/courses/${lesson.course_id}`)}
+        sx={{ mb: 2 }}
+      >
+        {t('lesson.backToCourse')}
+      </Button>
 
-      <Card sx={{ mb: 3 }}>
+      {isOffline && (
+        <Alert severity="warning" sx={{ mb: 2.5 }}>
+          {t('lesson.offlineBanner')}
+        </Alert>
+      )}
+
+      {localized.isOriginalFallback && (
+        <Alert severity="info" sx={{ mb: 2.5 }}>
+          {t('courses.originalLanguageNotice', {
+            lang: getLanguageDisplayName(localized.activeLanguage),
+          })}
+        </Alert>
+      )}
+
+      <Card className="glass-panel" sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="h4" component="h1" gutterBottom fontWeight="bold">
-            {lesson.title}
-          </Typography>
-          {lesson.description && (
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-              {lesson.description}
-            </Typography>
-          )}
-
-          {progress && (
-            <Box sx={{ mb: 2 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body2">Progress</Typography>
-                <Typography variant="body2">{progress.progress_percentage}%</Typography>
-              </Box>
-              <LinearProgress
-                variant="determinate"
-                value={progress.progress_percentage}
-                color={isCompleted ? 'success' : 'primary'}
-              />
+          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={1.5}>
+            <Box>
+              <Typography variant="h4" component="h1" fontWeight={800} gutterBottom>
+                {localized.title}
+              </Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                <Chip size="small" label={lType.toUpperCase()} color="primary" variant="outlined" />
+                <Chip size="small" label={getLanguageDisplayName(localized.activeLanguage)} variant="outlined" />
+                {durationMins > 0 && <Chip size="small" label={`${durationMins} min`} variant="outlined" />}
+              </Stack>
             </Box>
-          )}
 
-          {!isCompleted && (
-            <Button
-              variant="contained"
-              color="success"
-              onClick={handleComplete}
-              startIcon={<CheckCircle />}
-              sx={{ mt: 2 }}
-            >
-              Mark as Completed
-            </Button>
-          )}
-
-          {isCompleted && (
-            <Alert severity="success" sx={{ mt: 2 }}>
-              Lesson completed! Great job!
-            </Alert>
-          )}
+            {progress?.completion_status === 'completed' && (
+              <Chip icon={<CheckCircle />} label="Completed" color="success" />
+            )}
+          </Stack>
         </CardContent>
       </Card>
 
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography
-          variant="body1"
-          component="div"
-          sx={{
-            whiteSpace: 'pre-wrap',
-            lineHeight: 1.8,
-            '& p': { mb: 2 },
-          }}
-        >
-          {lesson.content || ''}
-        </Typography>
-      </Paper>
+      {savingMediaPct !== null && (
+        <LinearProgress variant="determinate" value={savingMediaPct} sx={{ mb: 2, borderRadius: 2 }} />
+      )}
 
+      {/* Audio Lesson Player */}
+      {lesson.audio_url && (
+        <AudioLessonPlayer
+          userId={user?.id}
+          courseId={lesson.course_id}
+          lessonId={lesson.id}
+          title={`${localized.title} — ${t('lesson.audioLesson')}`}
+          canonicalUrl={lesson.audio_url}
+          signedUrl={lesson.audio_url_signed}
+          initialPositionSeconds={progress?.last_position_seconds || 0}
+          lowBandwidthMode={lowBandwidthMode}
+          onProgressTick={(pct, posSec) => {
+            if (progress?.completion_status !== 'completed') {
+              persistProgress('in_progress', pct, posSec);
+            }
+          }}
+          onCompleted={() => persistProgress('completed', 100, 0)}
+        />
+      )}
+
+      {/* Video Player */}
       {lesson.video_url && (
-        <Card sx={{ mb: 3 }}>
+        <Card className="glass-panel" sx={{ mb: 3 }}>
           <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Video Content
-            </Typography>
-            {isDirectVideo ? (
-              <Box
-                component="video"
-                controls
-                preload="metadata"
-                src={lesson.video_url.startsWith('/uploads/') ? `${process.env.REACT_APP_API_BASE_URL || ''}${lesson.video_url}` : lesson.video_url}
-                sx={{ width: '100%', maxHeight: '500px', backgroundColor: '#000', borderRadius: 1 }}
-              />
-            ) : youtubeEmbedUrl ? (
-              <Box
-                component="iframe"
-                title={`${lesson.title} video`}
-                src={youtubeEmbedUrl}
-                loading="lazy"
-                referrerPolicy="strict-origin-when-cross-origin"
-                sx={{ width: '100%', height: '400px', border: 'none' }}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
+            <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} mb={2}>
+              <Typography variant="h6" fontWeight={700}>
+                {t('lesson.videoLesson')}
+              </Typography>
+              <Stack direction="row" spacing={1}>
+                {videoSavedOffline ? (
+                  <Chip icon={<OfflinePin />} label={t('lesson.savedOfflineBadge')} color="success" size="small" />
+                ) : (
+                  !isOffline &&
+                  lesson.video_url.startsWith('/uploads/') && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<CloudDownload />}
+                      onClick={() => handleSaveAssetOffline(lesson.video_url, lesson.video_url_signed, 'video')}
+                    >
+                      {t('lesson.saveOfflineBtn')}
+                    </Button>
+                  )
+                )}
+                {lesson.video_url.startsWith('/uploads/') && (
+                  <Button
+                    size="small"
+                    component="a"
+                    href={
+                      videoOfflineUrl ||
+                      `${lesson.video_url_signed || lesson.video_url}${
+                        (lesson.video_url_signed || lesson.video_url).includes('?') ? '&' : '?'
+                      }download=1`
+                    }
+                    download
+                    startIcon={<Download />}
+                  >
+                    {t('lesson.downloadFileBtn')}
+                  </Button>
+                )}
+              </Stack>
+            </Stack>
+
+            {!videoLoadApproved && !videoOfflineUrl ? (
+              <Box sx={{ p: 3, bgcolor: '#f1f5f9', borderRadius: 2, textAlign: 'center' }}>
+                <Typography variant="body2" sx={{ mb: 1.5 }}>
+                  {t('lesson.lowBandwidthMediaNotice')}
+                </Typography>
+                <Button variant="contained" onClick={() => setVideoLoadApproved(true)}>
+                  {t('lesson.loadMediaBtn')}
+                </Button>
+              </Box>
+            ) : !videoOfflineUrl &&
+              lesson.video_url.startsWith('http') &&
+              (lesson.video_url.includes('youtube.com') || lesson.video_url.includes('youtu.be')) ? (
+              isOffline ? (
+                <Alert severity="info">
+                  External YouTube video streams require an active internet connection. All saved offline audio narrations, PDFs, and study notes below remain fully accessible offline.
+                </Alert>
+              ) : (
+                <Box sx={{ position: 'relative', pb: '56.25%', height: 0, overflow: 'hidden', borderRadius: 2 }}>
+                  <iframe
+                    src={lesson.video_url}
+                    title={localized.title}
+                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 0 }}
+                    allowFullScreen
+                  />
+                </Box>
+              )
             ) : (
-              <Alert severity="warning">This video URL is not supported. Use an uploaded video or a valid YouTube link.</Alert>
+              <video
+                controls
+                preload={videoOfflineUrl ? 'auto' : 'metadata'}
+                src={videoSrc}
+                style={{ width: '100%', maxHeight: 460, borderRadius: 8, background: '#000' }}
+                onEnded={() => persistProgress('completed', 100)}
+              >
+                Your browser does not support HTML5 video playback.
+              </video>
             )}
           </CardContent>
         </Card>
       )}
 
-      {lesson.assessments?.length > 0 && (
-        <Card sx={{ mb: 3 }}>
+      {/* Image / Diagram */}
+      {lesson.image_url && (
+        <Card className="glass-panel" sx={{ mb: 3 }}>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Box
+              component="img"
+              src={imgSrc}
+              alt={lesson.alt_text || `${localized.title} educational diagram`}
+              loading="lazy"
+              sx={{ maxWidth: '100%', maxHeight: 440, borderRadius: 2 }}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Text Content */}
+      {localized.content && (
+        <Card className="glass-panel" sx={{ mb: 3 }}>
+          <CardContent sx={{ p: { xs: 2.5, sm: 4 } }}>
+            <Typography
+              variant="body1"
+              component="div"
+              sx={{ whiteSpace: 'pre-line', lineHeight: 1.85, fontSize: '1.05rem' }}
+            >
+              {localized.content}
+            </Typography>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* PDF Document */}
+      {lesson.pdf_url && (
+        <Card className="glass-panel" sx={{ mb: 3 }}>
           <CardContent>
-            <Typography variant="h5" fontWeight="bold" gutterBottom>Lesson Assessment</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Choose an answer for each question. Your score is checked securely by the server.</Typography>
-            {lesson.assessments.map((assessment, index) => {
-              const options = getAssessmentOptions(assessment);
-              const result = assessmentResults[assessment.id];
+            <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} mb={2}>
+              <Typography variant="h6" fontWeight={700}>
+                {t('lesson.pdfLesson')}
+              </Typography>
+              <Stack direction="row" spacing={1}>
+                {pdfSavedOffline ? (
+                  <Chip icon={<OfflinePin />} label={t('lesson.savedOfflineBadge')} color="success" size="small" />
+                ) : (
+                  !isOffline &&
+                  lesson.pdf_url.startsWith('/uploads/') && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<CloudDownload />}
+                      onClick={() => handleSaveAssetOffline(lesson.pdf_url, lesson.pdf_url_signed, 'pdf')}
+                    >
+                      {t('lesson.saveOfflineBtn')}
+                    </Button>
+                  )
+                )}
+                <Button
+                  variant="contained"
+                  size="small"
+                  component="a"
+                  href={pdfSrc}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                  startIcon={<Download />}
+                >
+                  {t('lesson.downloadFileBtn')}
+                </Button>
+              </Stack>
+            </Stack>
+
+            {!lowBandwidthMode && (
+              <Box sx={{ height: 460, border: '1px solid #cbd5e1', borderRadius: 2, overflow: 'hidden' }}>
+                <iframe
+                  src={pdfSrc}
+                  title={`${localized.title} PDF`}
+                  style={{ width: '100%', height: '100%', border: 0 }}
+                />
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Inline Lesson Knowledge Check Questions */}
+      {inlineAssessments.length > 0 && !isOffline && (
+        <Card className="glass-panel" sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" fontWeight={800} gutterBottom>
+              {t('lesson.inlineQuizTitle')}
+            </Typography>
+            {inlineAssessments.map((q, qIndex) => {
+              const res = inlineResults[q.id];
               return (
-                <Box key={assessment.id} sx={{ py: 2 }}>
-                  <Typography variant="subtitle1" fontWeight="bold" gutterBottom>{index + 1}. {assessment.question}</Typography>
-                  <RadioGroup
-                    value={answers[assessment.id] ?? ''}
-                    onChange={(event) => setAnswers((current) => ({ ...current, [assessment.id]: event.target.value }))}
-                  >
-                    {options.map((option, optionIndex) => (
-                      <FormControlLabel key={`${assessment.id}-${optionIndex}`} value={String(optionIndex)} control={<Radio />} label={option} disabled={!!result?.success || offlineMode} />
-                    ))}
-                  </RadioGroup>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    disabled={answers[assessment.id] === undefined || answers[assessment.id] === '' || !!result?.success || !!submittingAssessment[assessment.id] || offlineMode}
-                    onClick={() => submitAssessment(assessment.id)}
-                    sx={{ mt: 1 }}
-                  >
-                    {submittingAssessment[assessment.id] ? 'Submitting…' : result?.success ? 'Submitted' : 'Submit answer'}
-                  </Button>
-                  {result && <Alert severity={result.success ? (result.is_correct ? 'success' : 'warning') : 'error'} sx={{ mt: 1 }}>{result.message}{result.success ? ` Score: ${result.score}/${assessment.points || 1}` : ''}</Alert>}
-                  {index < lesson.assessments.length - 1 && <Divider sx={{ mt: 2 }} />}
-                </Box>
+                <Paper key={q.id} variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2 }}>
+                  <FormControl component="fieldset" fullWidth>
+                    <FormLabel component="legend" sx={{ mb: 1, fontWeight: 700, color: 'text.primary' }}>
+                      {qIndex + 1}. {q.question}
+                    </FormLabel>
+                    <RadioGroup
+                      value={inlineAnswers[q.id] !== undefined ? String(inlineAnswers[q.id]) : ''}
+                      onChange={(e) =>
+                        setInlineAnswers((prev) => ({ ...prev, [q.id]: parseInt(e.target.value, 10) }))
+                      }
+                    >
+                      {q.parsedOptions.map((option, oIndex) => (
+                        <FormControlLabel
+                          key={oIndex}
+                          value={String(oIndex)}
+                          control={<Radio />}
+                          label={option}
+                        />
+                      ))}
+                    </RadioGroup>
+                  </FormControl>
+
+                  <Stack direction="row" spacing={2} alignItems="center" mt={1}>
+                    {user?.role === 'student' && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={inlineAnswers[q.id] === undefined}
+                        onClick={() => handleCheckInlineQuestion(q)}
+                      >
+                        {t('lesson.submitAnswer')}
+                      </Button>
+                    )}
+                    {res && (
+                      <Typography
+                        variant="body2"
+                        fontWeight={700}
+                        color={res.is_correct ? 'success.main' : 'error.main'}
+                      >
+                        {res.is_correct ? `✓ Correct (+${res.points_earned} pts)` : '✗ Try reviewing the lesson text'}
+                      </Typography>
+                    )}
+                  </Stack>
+                </Paper>
               );
             })}
           </CardContent>
         </Card>
       )}
 
-      {/* Navigation */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
-        {prevLesson ? (
+      {user?.role === 'student' && progress?.completion_status !== 'completed' && (
+        <Box sx={{ textAlign: 'center', mt: 3 }}>
           <Button
-            startIcon={<ArrowBack />}
-            component={Link}
-            to={`/lessons/${prevLesson.id}`}
-          >
-            Previous Lesson
-          </Button>
-        ) : (
-          <Box />
-        )}
-
-        {nextLesson ? (
-          <Button
-            endIcon={<ArrowForward />}
-            component={Link}
-            to={`/lessons/${nextLesson.id}`}
             variant="contained"
+            size="large"
+            onClick={() => persistProgress('completed', 100)}
+            startIcon={<CheckCircle />}
+            sx={{ px: 4, py: 1.4, fontWeight: 700 }}
           >
-            Next Lesson
+            {t('lesson.markCompleted')}
           </Button>
-        ) : (
-          <Button
-            endIcon={<ArrowBack />}
-            component={Link}
-            to={`/courses/${lesson.course_id}`}
-            variant="contained"
-          >
-            Back to Course
-          </Button>
-        )}
-      </Box>
+        </Box>
+      )}
     </Container>
   );
 };
 
 export default LessonDetail;
-

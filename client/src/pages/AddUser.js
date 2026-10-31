@@ -1,196 +1,190 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-    Container,
-    Typography,
-    Box,
-    TextField,
-    Button,
-    Card,
-    CardContent,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    Alert,
-    CircularProgress
+  Container,
+  Typography,
+  Box,
+  TextField,
+  Button,
+  Paper,
+  MenuItem,
+  Alert,
+  Grid,
 } from '@mui/material';
 import { ArrowBack, PersonAdd } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useToast } from '../context/ToastContext';
 
 const AddUser = () => {
-    const navigate = useNavigate();
-    const [formData, setFormData] = useState({
-        username: '',
-        email: '',
-        password: '',
-        full_name: '',
-        role: 'student',
-        school_name: 'Rural High School', // Default
-        class_grade: ''
-    });
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
+  const navigate = useNavigate();
+  const { showToast } = useToast();
 
-    const handleChange = (e) => {
-        setFormData({
-            ...formData,
-            [e.target.name]: e.target.value
-        });
-    };
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
+    full_name: '',
+    role: 'teacher',
+    school_name: '',
+    class_grade: '',
+    preferred_language: 'en',
+  });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        setError('');
-        setSuccess('');
+  const handleChange = (e) => {
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
 
-        try {
-            await axios.post('/api/users', formData);
-            setSuccess('User created successfully!');
-            setFormData({
-                username: '',
-                email: '',
-                password: '',
-                full_name: '',
-                role: 'student',
-                school_name: 'Rural High School',
-                class_grade: ''
-            });
-        } catch (err) {
-            setError(err.response?.data?.message || 'Failed to create user');
-        } finally {
-            setLoading(false);
-        }
-    };
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters long.');
+      return;
+    }
 
-    return (
-        <Container maxWidth="md" sx={{ py: 8 }}>
+    setLoading(true);
+    try {
+      await axios.post('/api/users', formData);
+      showToast(`Created ${formData.role} account "${formData.username}".`, 'success');
+      navigate('/admin/users');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Error creating user account');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      <Button startIcon={<ArrowBack />} onClick={() => navigate('/admin/users')} sx={{ mb: 2 }}>
+        Back to User Management
+      </Button>
+
+      <Paper className="glass-panel" sx={{ p: { xs: 3, sm: 4 } }}>
+        <Typography variant="h4" component="h1" fontWeight={800} gutterBottom>
+          Create Teacher or Student Account
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          Administrators provision verified Teacher and Student accounts here.
+        </Typography>
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {error}
+          </Alert>
+        )}
+
+        <Box component="form" onSubmit={handleSubmit}>
+          <Grid container spacing={2.5}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Full Name"
+                name="full_name"
+                value={formData.full_name}
+                onChange={handleChange}
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                select
+                fullWidth
+                label="Account Role"
+                name="role"
+                value={formData.role}
+                onChange={handleChange}
+              >
+                <MenuItem value="teacher">Teacher</MenuItem>
+                <MenuItem value="student">Student</MenuItem>
+              </TextField>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Username"
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                type="email"
+                label="Email Address"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                type="password"
+                label="Initial Password (min 8 chars)"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                select
+                fullWidth
+                label="Preferred Language"
+                name="preferred_language"
+                value={formData.preferred_language}
+                onChange={handleChange}
+              >
+                <MenuItem value="en">English</MenuItem>
+                <MenuItem value="te">తెలుగు (Telugu)</MenuItem>
+                <MenuItem value="hi">हिन्दी (Hindi)</MenuItem>
+              </TextField>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="School Name"
+                name="school_name"
+                value={formData.school_name}
+                onChange={handleChange}
+              />
+            </Grid>
+            {formData.role === 'student' && (
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Class / Grade"
+                  name="class_grade"
+                  value={formData.class_grade}
+                  onChange={handleChange}
+                />
+              </Grid>
+            )}
+          </Grid>
+
+          <Box sx={{ mt: 3.5, display: 'flex', justifyContent: 'flex-end' }}>
             <Button
-                startIcon={<ArrowBack />}
-                onClick={() => navigate('/admin')}
-                sx={{ mb: 4 }}
+              type="submit"
+              variant="contained"
+              size="large"
+              startIcon={<PersonAdd />}
+              disabled={loading}
+              sx={{ fontWeight: 700 }}
             >
-                Back to Dashboard
+              {loading ? 'Creating...' : 'Create User'}
             </Button>
-
-            <Card className="glass-panel">
-                <CardContent sx={{ p: 4 }}>
-                    <Box sx={{ mb: 4, textAlign: 'center' }}>
-                        <Box sx={{
-                            display: 'inline-flex',
-                            p: 2,
-                            borderRadius: '50%',
-                            bgcolor: 'rgba(0, 210, 255, 0.1)',
-                            mb: 2
-                        }}>
-                            <PersonAdd sx={{ fontSize: 40, color: '#00d2ff' }} />
-                        </Box>
-                        <Typography variant="h4" component="h1" fontWeight="bold">
-                            Add New User
-                        </Typography>
-                        <Typography color="text.secondary">
-                            Create a new account for a student or teacher
-                        </Typography>
-                    </Box>
-
-                    {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-                    {success && <Alert severity="success" sx={{ mb: 3 }}>{success}</Alert>}
-
-                    <form onSubmit={handleSubmit}>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            <TextField
-                                label="Full Name"
-                                name="full_name"
-                                value={formData.full_name}
-                                onChange={handleChange}
-                                required
-                                fullWidth
-                            />
-                            <Box sx={{ display: 'flex', gap: 2 }}>
-                                <TextField
-                                    label="Username"
-                                    name="username"
-                                    value={formData.username}
-                                    onChange={handleChange}
-                                    required
-                                    fullWidth
-                                />
-                                <TextField
-                                    label="Email"
-                                    name="email"
-                                    type="email"
-                                    value={formData.email}
-                                    onChange={handleChange}
-                                    required
-                                    fullWidth
-                                />
-                            </Box>
-                            <TextField
-                                label="Password"
-                                name="password"
-                                type="password"
-                                value={formData.password}
-                                onChange={handleChange}
-                                required
-                                fullWidth
-                                helperText="Must be at least 6 characters"
-                            />
-
-                            <FormControl fullWidth>
-                                <InputLabel>Role</InputLabel>
-                                <Select
-                                    name="role"
-                                    value={formData.role}
-                                    label="Role"
-                                    onChange={handleChange}
-                                >
-                                    <MenuItem value="student">Student</MenuItem>
-                                    <MenuItem value="teacher">Teacher</MenuItem>
-                                    <MenuItem value="admin">Admin</MenuItem>
-                                </Select>
-                            </FormControl>
-
-                            <TextField
-                                label="School Name"
-                                name="school_name"
-                                value={formData.school_name}
-                                onChange={handleChange}
-                                fullWidth
-                            />
-
-                            {formData.role === 'student' && (
-                                <TextField
-                                    label="Class/Grade"
-                                    name="class_grade"
-                                    value={formData.class_grade}
-                                    onChange={handleChange}
-                                    fullWidth
-                                    placeholder="e.g. 10th Grade"
-                                />
-                            )}
-
-                            <Button
-                                type="submit"
-                                variant="contained"
-                                size="large"
-                                disabled={loading}
-                                sx={{
-                                    mt: 2,
-                                    py: 1.5,
-                                    background: 'linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%)',
-                                    fontWeight: 'bold'
-                                }}
-                            >
-                                {loading ? <CircularProgress size={24} color="inherit" /> : 'Create User'}
-                            </Button>
-                        </Box>
-                    </form>
-                </CardContent>
-            </Card>
-        </Container>
-    );
+          </Box>
+        </Box>
+      </Paper>
+    </Container>
+  );
 };
 
 export default AddUser;

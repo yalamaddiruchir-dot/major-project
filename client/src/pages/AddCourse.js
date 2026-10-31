@@ -1,173 +1,291 @@
 import React, { useState } from 'react';
-import {
-    Container,
-    Typography,
-    Box,
-    TextField,
-    Button,
-    Card,
-    CardContent,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    Alert,
-    CircularProgress
-} from '@mui/material';
-import { ArrowBack, AddBox } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import {
+  Container,
+  Typography,
+  Box,
+  TextField,
+  Button,
+  Paper,
+  MenuItem,
+  Alert,
+  Grid,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Stack,
+} from '@mui/material';
+import { ArrowBack, Save, ExpandMore, Translate, UploadFile } from '@mui/icons-material';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+
+const CATEGORIES = [
+  'Digital Literacy',
+  'Computer Science',
+  'Mathematics',
+  'Science',
+  'Language',
+  'Vocational',
+  'Office Applications',
+  'Digital Communication',
+];
 
 const AddCourse = () => {
-    const navigate = useNavigate();
-    const [formData, setFormData] = useState({
-        title: '',
-        description: '',
-        category: '',
-        language: 'english',
-        thumbnail_url: ''
-    });
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { showToast } = useToast();
 
-    const handleChange = (e) => {
-        setFormData({
-            ...formData,
-            [e.target.name]: e.target.value
-        });
-    };
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    category: 'Digital Literacy',
+    level: 'beginner',
+    language: 'en',
+    thumbnail_url: '',
+  });
+  const [teTrans, setTeTrans] = useState({ title: '', description: '' });
+  const [hiTrans, setHiTrans] = useState({ title: '', description: '' });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        setError('');
+  const dashboardBackPath = user?.role === 'admin' ? '/admin' : '/teacher';
 
-        try {
-            await axios.post('/api/courses', formData);
-            navigate('/admin'); // Redirect back to dashboard on success
-        } catch (err) {
-            setError(err.response?.data?.message || 'Failed to create course');
-            setLoading(false);
-        }
-    };
+  const handleChange = (e) => {
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
 
-    return (
-        <Container maxWidth="md" sx={{ py: 8 }}>
+  const handleThumbnailUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await axios.post('/api/upload?purpose=thumbnail', fd);
+      setFormData((prev) => ({ ...prev, thumbnail_url: res.data.url }));
+      showToast('Course thumbnail uploaded!', 'success');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Thumbnail upload failed', 'error');
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!formData.title.trim()) {
+      setError('Course title is required.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const translations = {};
+      if (teTrans.title.trim()) {
+        translations.te = { title: teTrans.title.trim(), description: teTrans.description.trim() };
+      }
+      if (hiTrans.title.trim()) {
+        translations.hi = { title: hiTrans.title.trim(), description: hiTrans.description.trim() };
+      }
+
+      const res = await axios.post('/api/courses', {
+        ...formData,
+        title: formData.title.trim(),
+        translations: Object.keys(translations).length ? translations : undefined,
+      });
+
+      showToast('Course created successfully!', 'success');
+      navigate(`/courses/${res.data.course.id}`);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Error creating course');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      <Button startIcon={<ArrowBack />} onClick={() => navigate(dashboardBackPath)} sx={{ mb: 2 }}>
+        Back to Dashboard
+      </Button>
+
+      <Paper className="glass-panel" sx={{ p: { xs: 3, sm: 4 } }}>
+        <Typography variant="h4" component="h1" fontWeight={800} gutterBottom>
+          Create New Course
+        </Typography>
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {error}
+          </Alert>
+        )}
+
+        <Box component="form" onSubmit={handleSubmit}>
+          <Grid container spacing={2.5}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Course Title"
+                name="title"
+                value={formData.title}
+                onChange={handleChange}
+                required
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Course Description"
+                name="description"
+                value={formData.description}
+                onChange={handleChange}
+                multiline
+                rows={4}
+                required
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={4}>
+              <TextField
+                select
+                fullWidth
+                label="Category"
+                name="category"
+                value={formData.category}
+                onChange={handleChange}
+              >
+                {CATEGORIES.map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+
+            <Grid item xs={12} sm={4}>
+              <TextField
+                select
+                fullWidth
+                label="Primary Language"
+                name="language"
+                value={formData.language}
+                onChange={handleChange}
+              >
+                <MenuItem value="en">English (en)</MenuItem>
+                <MenuItem value="te">తెలుగు / Telugu (te)</MenuItem>
+                <MenuItem value="hi">हिन्दी / Hindi (hi)</MenuItem>
+              </TextField>
+            </Grid>
+
+            <Grid item xs={12} sm={4}>
+              <TextField
+                select
+                fullWidth
+                label="Difficulty Level"
+                name="level"
+                value={formData.level}
+                onChange={handleChange}
+              >
+                <MenuItem value="beginner">Beginner</MenuItem>
+                <MenuItem value="intermediate">Intermediate</MenuItem>
+                <MenuItem value="advanced">Advanced</MenuItem>
+              </TextField>
+            </Grid>
+
+            <Grid item xs={12}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Thumbnail URL (optional)"
+                  name="thumbnail_url"
+                  value={formData.thumbnail_url}
+                  onChange={handleChange}
+                />
+                <Button variant="outlined" component="label" startIcon={<UploadFile />} sx={{ whiteSpace: 'nowrap' }}>
+                  Upload Image
+                  <input type="file" hidden accept=".jpg,.jpeg,.png,.webp" onChange={handleThumbnailUpload} />
+                </Button>
+              </Stack>
+            </Grid>
+
+            <Grid item xs={12}>
+              <Accordion variant="outlined">
+                <AccordionSummary expandIcon={<ExpandMore />}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Translate color="primary" fontSize="small" />
+                    <Typography fontWeight={700}>
+                      Optional Multilingual Course Translations (Telugu / Hindi)
+                    </Typography>
+                  </Stack>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+                    Provide verified teacher-authored translations so students browsing in Telugu or Hindi see localized titles and descriptions.
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Telugu Title (తెలుగు శీర్షిక)"
+                        value={teTrans.title}
+                        onChange={(e) => setTeTrans((p) => ({ ...p, title: e.target.value }))}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Hindi Title (हिन्दी शीर्षक)"
+                        value={hiTrans.title}
+                        onChange={(e) => setHiTrans((p) => ({ ...p, title: e.target.value }))}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        multiline
+                        rows={2}
+                        label="Telugu Description"
+                        value={teTrans.description}
+                        onChange={(e) => setTeTrans((p) => ({ ...p, description: e.target.value }))}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        multiline
+                        rows={2}
+                        label="Hindi Description"
+                        value={hiTrans.description}
+                        onChange={(e) => setHiTrans((p) => ({ ...p, description: e.target.value }))}
+                      />
+                    </Grid>
+                  </Grid>
+                </AccordionDetails>
+              </Accordion>
+            </Grid>
+          </Grid>
+
+          <Box sx={{ mt: 3.5, display: 'flex', justifyContent: 'flex-end' }}>
             <Button
-                startIcon={<ArrowBack />}
-                onClick={() => navigate('/admin')}
-                sx={{ mb: 4 }}
+              type="submit"
+              variant="contained"
+              size="large"
+              startIcon={<Save />}
+              disabled={loading}
+              sx={{ fontWeight: 700 }}
             >
-                Back to Dashboard
+              {loading ? 'Creating...' : 'Create Course'}
             </Button>
-
-            <Card className="glass-panel">
-                <CardContent sx={{ p: 4 }}>
-                    <Box sx={{ mb: 4, textAlign: 'center' }}>
-                        <Box sx={{
-                            display: 'inline-flex',
-                            p: 2,
-                            borderRadius: '50%',
-                            bgcolor: 'rgba(102, 126, 234, 0.1)',
-                            mb: 2
-                        }}>
-                            <AddBox sx={{ fontSize: 40, color: '#667eea' }} />
-                        </Box>
-                        <Typography variant="h4" component="h1" fontWeight="bold">
-                            Add New Course
-                        </Typography>
-                        <Typography color="text.secondary">
-                            Create a new course for students
-                        </Typography>
-                    </Box>
-
-                    {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-
-                    <form onSubmit={handleSubmit}>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            <TextField
-                                label="Course Title"
-                                name="title"
-                                value={formData.title}
-                                onChange={handleChange}
-                                required
-                                fullWidth
-                            />
-
-                            <TextField
-                                label="Description"
-                                name="description"
-                                value={formData.description}
-                                onChange={handleChange}
-                                multiline
-                                rows={4}
-                                required
-                                fullWidth
-                            />
-
-                            <Box sx={{ display: 'flex', gap: 2 }}>
-                                <FormControl fullWidth>
-                                    <InputLabel>Category</InputLabel>
-                                    <Select
-                                        name="category"
-                                        value={formData.category}
-                                        label="Category"
-                                        onChange={handleChange}
-                                        required
-                                    >
-                                        <MenuItem value="Digital Literacy">Digital Literacy</MenuItem>
-                                        <MenuItem value="Language">Language</MenuItem>
-                                        <MenuItem value="Mathematics">Mathematics</MenuItem>
-                                        <MenuItem value="Science">Science</MenuItem>
-                                        <MenuItem value="Vocational">Vocational</MenuItem>
-                                        <MenuItem value="Other">Other</MenuItem>
-                                    </Select>
-                                </FormControl>
-
-                                <FormControl fullWidth>
-                                    <InputLabel>Language</InputLabel>
-                                    <Select
-                                        name="language"
-                                        value={formData.language}
-                                        label="Language"
-                                        onChange={handleChange}
-                                    >
-                                        <MenuItem value="english">English</MenuItem>
-                                        <MenuItem value="hindi">Hindi</MenuItem>
-                                        <MenuItem value="regional">Regional</MenuItem>
-                                    </Select>
-                                </FormControl>
-                            </Box>
-
-                            <TextField
-                                label="Thumbnail URL (Optional)"
-                                name="thumbnail_url"
-                                value={formData.thumbnail_url}
-                                onChange={handleChange}
-                                fullWidth
-                                helperText="Link to an image for the course card"
-                            />
-
-                            <Button
-                                type="submit"
-                                variant="contained"
-                                size="large"
-                                disabled={loading}
-                                sx={{
-                                    mt: 2,
-                                    py: 1.5,
-                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                    fontWeight: 'bold'
-                                }}
-                            >
-                                {loading ? <CircularProgress size={24} color="inherit" /> : 'Create Course'}
-                            </Button>
-                        </Box>
-                    </form>
-                </CardContent>
-            </Card>
-        </Container>
-    );
+          </Box>
+        </Box>
+      </Paper>
+    </Container>
+  );
 };
 
 export default AddCourse;

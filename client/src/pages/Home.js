@@ -8,173 +8,179 @@ import {
   Grid,
   Card,
   CardContent,
-
-
+  Stack,
 } from '@mui/material';
 import {
-  School,
-  Computer,
-  People,
-  TrendingUp,
+  CloudDownload,
+  Translate,
+  GraphicEq,
+  WorkspacePremium,
+  VerifiedUser,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 
 const Home = () => {
   const { isAuthenticated } = useAuth();
+  const { t } = useLanguage();
 
   const features = [
     {
-      icon: <Computer sx={{ fontSize: 60, color: '#1976d2' }} />,
-      title: 'Digital Literacy',
-      description: 'Learn essential computer and digital skills tailored for rural students.',
+      icon: <CloudDownload sx={{ fontSize: 48, color: '#1d4ed8' }} aria-hidden="true" />,
+      title: t('home.featureOfflineTitle'),
+      description: t('home.featureOfflineDesc'),
     },
     {
-      icon: <School sx={{ fontSize: 60, color: '#1976d2' }} />,
-      title: 'Interactive Lessons',
-      description: 'Engaging content in local languages to improve learning outcomes.',
+      icon: <Translate sx={{ fontSize: 48, color: '#0284c7' }} aria-hidden="true" />,
+      title: t('home.featureMultilingualTitle'),
+      description: t('home.featureMultilingualDesc'),
     },
     {
-      icon: <People sx={{ fontSize: 60, color: '#1976d2' }} />,
-      title: 'Teacher Dashboard',
-      description: 'Track student progress and manage classes effectively.',
+      icon: <GraphicEq sx={{ fontSize: 48, color: '#059669' }} aria-hidden="true" />,
+      title: t('home.featureAudioTitle'),
+      description: t('home.featureAudioDesc'),
     },
     {
-      icon: <TrendingUp sx={{ fontSize: 60, color: '#1976d2' }} />,
-      title: 'Progress Tracking',
-      description: 'Monitor your learning journey and achievements.',
+      icon: <WorkspacePremium sx={{ fontSize: 48, color: '#b45309' }} aria-hidden="true" />,
+      title: t('home.featureCertTitle'),
+      description: t('home.featureCertDesc'),
     },
   ];
 
   return (
     <Box>
-      {/* Hero Section */}
+      {/* Accessible Hero Section (no external network texture dependencies) */}
       <Box
         sx={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white',
-          py: 15,
+          background: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 55%, #0369a1 100%)',
+          color: '#ffffff',
+          py: { xs: 8, md: 12 },
           textAlign: 'center',
           position: 'relative',
           overflow: 'hidden',
         }}
       >
-        <Box
-          sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            opacity: 0.1,
-            backgroundImage: 'url("https://www.transparenttextures.com/patterns/cubes.png")',
-          }}
-        />
-        {/* Floating Shapes Animation */}
-        <Box className="floating-shape shape-1" />
-        <Box className="floating-shape shape-2" />
-        <Box className="floating-shape shape-3" />
+        <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1 }}>
+          <Typography
+            variant="h3"
+            component="h1"
+            gutterBottom
+            fontWeight={800}
+            sx={{ fontSize: { xs: '2rem', sm: '2.6rem', md: '3.2rem' }, lineHeight: 1.2 }}
+          >
+            {t('home.heroTitle')}
+          </Typography>
+          <Typography
+            variant="h6"
+            component="p"
+            sx={{ mb: 3, opacity: 0.95, fontWeight: 500, fontSize: { xs: '1.05rem', md: '1.3rem' } }}
+          >
+            {t('home.heroTagline')}
+          </Typography>
+          <Typography
+            variant="body1"
+            sx={{ mb: 5, maxWidth: 680, mx: 'auto', opacity: 0.92, lineHeight: 1.75 }}
+          >
+            {t('home.heroDescription')}
+          </Typography>
 
-        <Container sx={{ position: 'relative', zIndex: 1 }}>
-          <Typography variant="h2" component="h1" gutterBottom fontWeight="bold" className="animate-fade-in" sx={{ textShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
-            Digital Learning Platform
-          </Typography>
-          <Typography variant="h5" component="h2" gutterBottom sx={{ mb: 6, opacity: 0.9, fontWeight: 300, letterSpacing: 1 }} className="animate-fade-in delay-100">
-            Empowering Rural Education in Nabha
-          </Typography>
-          <Typography variant="body1" sx={{ mb: 6, maxWidth: '600px', mx: 'auto', fontSize: '1.2rem', lineHeight: 1.8 }} className="animate-fade-in delay-200">
-            Bridging the digital divide by providing quality educational resources
-            accessible to students and teachers in rural areas.
-          </Typography>
-          {!isAuthenticated && (
-            <Box sx={{ display: 'flex', gap: 3, justifyContent: 'center' }} className="animate-fade-in delay-300">
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={2}
+            justifyContent="center"
+            alignItems="center"
+          >
+            {isAuthenticated ? (
               <Button
                 variant="contained"
                 size="large"
                 component={Link}
-                to="/register"
+                to="/dashboard"
                 sx={{
-                  bgcolor: 'white',
-                  color: '#667eea',
-                  px: 5,
-                  py: 1.8,
-                  fontSize: '1.1rem',
-                  borderRadius: '50px',
-                  fontWeight: 'bold',
-                  boxShadow: '0 10px 20px rgba(0,0,0,0.1)',
-                  '&:hover': { bgcolor: '#f0f0f0', transform: 'translateY(-3px)', boxShadow: '0 15px 30px rgba(0,0,0,0.15)' },
-                  transition: 'all 0.3s'
+                  bgcolor: '#ffffff',
+                  color: '#1e3a8a',
+                  px: 4,
+                  py: 1.5,
+                  fontWeight: 700,
+                  borderRadius: 2,
+                  '&:hover': { bgcolor: '#f1f5f9' },
                 }}
               >
-                Get Started
+                {t('home.goToDashboard')}
               </Button>
-              <Button
-                variant="outlined"
-                size="large"
-                component={Link}
-                to="/login"
-                sx={{
-                  borderColor: 'rgba(255,255,255,0.8)',
-                  borderWidth: 2,
-                  color: 'white',
-                  px: 5,
-                  py: 1.8,
-                  fontSize: '1.1rem',
-                  borderRadius: '50px',
-                  fontWeight: 'bold',
-                  '&:hover': { borderColor: 'white', bgcolor: 'rgba(255,255,255,0.1)', transform: 'translateY(-3px)' },
-                  transition: 'all 0.3s'
-                }}
-              >
-                Login
-              </Button>
-            </Box>
-          )}
+            ) : (
+              <>
+                <Button
+                  variant="contained"
+                  size="large"
+                  component={Link}
+                  to="/register"
+                  sx={{
+                    bgcolor: '#ffffff',
+                    color: '#1e3a8a',
+                    px: 4,
+                    py: 1.5,
+                    fontWeight: 700,
+                    borderRadius: 2,
+                    '&:hover': { bgcolor: '#f1f5f9' },
+                  }}
+                >
+                  {t('home.getStarted')}
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="large"
+                  component={Link}
+                  to="/login"
+                  sx={{
+                    borderColor: '#ffffff',
+                    borderWidth: 2,
+                    color: '#ffffff',
+                    px: 4,
+                    py: 1.5,
+                    fontWeight: 700,
+                    borderRadius: 2,
+                    '&:hover': { borderColor: '#ffffff', bgcolor: 'rgba(255,255,255,0.12)' },
+                  }}
+                >
+                  {t('home.signIn')}
+                </Button>
+              </>
+            )}
+
+            <Button
+              variant="text"
+              size="large"
+              component={Link}
+              to="/verify-certificate"
+              startIcon={<VerifiedUser />}
+              sx={{ color: '#ffffff', fontWeight: 600, textTransform: 'none' }}
+            >
+              {t('home.verifyCertificateBtn')}
+            </Button>
+          </Stack>
         </Container>
       </Box>
 
-      {/* Features Section */}
-      <Container sx={{ py: 10 }}>
-        <Typography variant="h3" component="h2" textAlign="center" gutterBottom fontWeight="bold" className="gradient-text animate-fade-in">
-          Key Features
+      {/* Key Features */}
+      <Container maxWidth="lg" sx={{ py: { xs: 6, md: 9 } }}>
+        <Typography variant="h4" component="h2" textAlign="center" fontWeight={800} gutterBottom className="gradient-text">
+          {t('home.keyFeatures')}
         </Typography>
-        <Typography variant="body1" textAlign="center" color="text.secondary" sx={{ mb: 8, fontSize: '1.1rem' }} className="animate-fade-in delay-100">
-          Everything you need for effective digital learning
+        <Typography variant="body1" textAlign="center" color="text.secondary" sx={{ mb: 6, maxWidth: 640, mx: 'auto' }}>
+          {t('home.keyFeaturesSub')}
         </Typography>
-        <Grid container spacing={4}>
+
+        <Grid container spacing={3}>
           {features.map((feature, index) => (
             <Grid item xs={12} sm={6} md={3} key={index}>
-              <Card
-                onMouseMove={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const x = e.clientX - rect.left;
-                  const y = e.clientY - rect.top;
-                  e.currentTarget.style.setProperty('--mouse-x', `${x}px`);
-                  e.currentTarget.style.setProperty('--mouse-y', `${y}px`);
-                }}
-                className={`glass-panel glow-card spotlight-card animate-fade-in delay-${(index + 2) * 100}`}
-                sx={{
-                  height: '100%',
-                  textAlign: 'center',
-                  p: 3,
-                  background: 'rgba(255,255,255,0.8)',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-                }}>
-                <Box className="spotlight-overlay" />
-                <CardContent sx={{ position: 'relative', zIndex: 1 }}>
-                  <Box sx={{
-                    mb: 3,
-                    transform: 'scale(1)',
-                    transition: 'transform 0.4s ease',
-                    '&:hover': { transform: 'scale(1.2) rotate(5deg)' }
-                  }}>
-                    {feature.icon}
-                  </Box>
-                  <Typography variant="h6" gutterBottom fontWeight="bold">
+              <Card className="glass-panel glow-card" sx={{ height: '100%', textAlign: 'center', p: 2 }}>
+                <CardContent>
+                  <Box sx={{ mb: 2 }}>{feature.icon}</Box>
+                  <Typography variant="h6" component="h3" gutterBottom fontWeight={700}>
                     {feature.title}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.65 }}>
                     {feature.description}
                   </Typography>
                 </CardContent>
@@ -184,40 +190,29 @@ const Home = () => {
         </Grid>
       </Container>
 
-      {/* CTA Section */}
       {!isAuthenticated && (
-        <Box sx={{ bgcolor: '#f8f9fe', py: 10 }}>
-          <Container>
-            <Box textAlign="center" className="glass-panel" sx={{ p: 8, bgcolor: 'white' }}>
-              <Typography variant="h4" gutterBottom fontWeight="bold" color="primary">
-                Ready to Start Learning?
-              </Typography>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 4, fontSize: '1.1rem' }}>
-                Join hundreds of students and teachers already using our platform
-              </Typography>
-              <Button
-                variant="contained"
-                size="large"
-                component={Link}
-                to="/register"
-                sx={{
-                  px: 6,
-                  py: 2,
-                  borderRadius: '30px',
-                  fontWeight: 'bold',
-                  background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
-                  '&:hover': { boxShadow: '0 10px 20px rgba(102, 126, 234, 0.4)', transform: 'translateY(-2px)' }
-                }}
-              >
-                Create Free Account
-              </Button>
-            </Box>
-          </Container>
-        </Box>
+        <Container maxWidth="md" sx={{ pb: 8 }}>
+          <Card className="glass-panel" sx={{ p: { xs: 3, sm: 5 }, textAlign: 'center' }}>
+            <Typography variant="h5" component="h2" fontWeight={800} gutterBottom color="primary">
+              {t('home.ctaTitle')}
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+              {t('home.ctaSubtitle')}
+            </Typography>
+            <Button
+              variant="contained"
+              size="large"
+              component={Link}
+              to="/register"
+              sx={{ px: 4, py: 1.4, fontWeight: 700, borderRadius: 2 }}
+            >
+              {t('home.getStarted')}
+            </Button>
+          </Card>
+        </Container>
       )}
     </Box>
   );
 };
 
 export default Home;
-
