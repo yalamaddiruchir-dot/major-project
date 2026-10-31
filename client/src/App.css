@@ -4,30 +4,26 @@
   flex-direction: column;
 }
 
-/* Responsive design helpers */
+.main-content {
+  flex: 1 0 auto;
+  width: 100%;
+}
+
 @media (max-width: 600px) {
   .MuiContainer-root {
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
   }
 }
 
-/* Smooth scrolling */
-html {
-  scroll-behavior: smooth;
-}
-
-/* Link styles */
 a {
   text-decoration: none;
   color: inherit;
 }
 
-/* Loading states */
 .loading-container {
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 60vh;
 }
-

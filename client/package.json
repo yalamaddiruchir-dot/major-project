@@ -1,42 +1,35 @@
 {
   "name": "digital-learning-client",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "private": true,
-  "proxy": "http://localhost:5000",
   "dependencies": {
+    "@emotion/react": "11.11.1",
+    "@emotion/styled": "11.11.0",
+    "@fontsource/noto-sans-devanagari": "^5.1.0",
+    "@fontsource/noto-sans-telugu": "^5.1.0",
+    "@mui/icons-material": "5.14.19",
+    "@mui/material": "5.14.20",
+    "axios": "^1.21.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "react-router-dom": "6.20.0",
-    "axios": "1.6.2",
-    "@mui/material": "5.14.20",
-    "@mui/icons-material": "5.14.19",
-    "@emotion/react": "11.11.1",
-    "@emotion/styled": "11.11.0"
+    "react-router-dom": "^7.18.5"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "start": "vite",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "react-scripts": "5.0.1"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "@testing-library/jest-dom": "^6.4.2",
+    "@testing-library/react": "^14.3.1",
+    "@testing-library/user-event": "^14.5.2",
+    "@vitejs/plugin-react": "^6.1.2",
+    "fake-indexeddb": "^6.0.0",
+    "jest-axe": "^9.0.0",
+    "jsdom": "^25.0.1",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
   }
 }

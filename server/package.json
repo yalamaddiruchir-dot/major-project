@@ -1,26 +1,45 @@
 {
   "name": "digital-learning-server",
-  "version": "1.0.0",
-  "description": "Backend server for Digital Learning Platform",
+  "version": "1.1.0",
+  "description": "Backend server for Digital Learning Platform for Rural Schools",
   "main": "index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
-    "migrate": "node database/migrate.js",
-    "seed": "node database/seed_data.js",
-    "create-admin": "node database/create-admin.js"
+    "start": "node --no-warnings index.js",
+    "dev": "node --watch --no-warnings index.js",
+    "migrate": "node --no-warnings database/migrate.js",
+    "seed": "node --no-warnings database/seed_safe.js",
+    "seed:safe": "node --no-warnings database/seed_safe.js",
+    "seed:reset": "node --no-warnings database/seed_data.js",
+    "create-admin": "node --no-warnings database/create-admin.js",
+    "backup": "node --no-warnings scripts/backup-cli.js backup",
+    "restore": "node --no-warnings scripts/backup-cli.js restore",
+    "verify-backup": "node --no-warnings scripts/backup-cli.js verify",
+    "test": "node --no-warnings ./node_modules/vitest/vitest.mjs run --globals --pool=forks --fileParallelism=false",
+    "test:unit": "node --no-warnings ./node_modules/vitest/vitest.mjs run tests/unit --globals --pool=forks --fileParallelism=false",
+    "test:integration": "node --no-warnings ./node_modules/vitest/vitest.mjs run tests/integration --globals --pool=forks --fileParallelism=false",
+    "test:db": "node --no-warnings ./node_modules/vitest/vitest.mjs run tests/database --globals --pool=forks --fileParallelism=false",
+    "test:security": "node --no-warnings ./node_modules/vitest/vitest.mjs run tests/security --globals --pool=forks --fileParallelism=false"
   },
   "dependencies": {
-    "bcryptjs": "2.4.3",
-    "cors": "2.8.5",
-    "dotenv": "16.3.1",
-    "express": "4.18.2",
-    "express-validator": "7.0.1",
-    "jsonwebtoken": "9.0.2",
-    "multer": "^2.0.2",
-    "sqlite3": "5.1.6"
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "bcryptjs": "^2.4.3",
+    "compression": "^1.8.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.22.3",
+    "express-rate-limit": "^8.7.2",
+    "express-validator": "^7.3.2",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.5.0",
+    "pdfkit": "^0.15.2",
+    "sql.js": "^1.15.2"
   },
   "devDependencies": {
-    "nodemon": "3.0.1"
+    "supertest": "^7.1.0",
+    "vitest": "^5.0.5"
   }
 }

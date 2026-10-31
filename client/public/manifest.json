@@ -1,16 +1,17 @@
 {
-  "short_name": "Digital Learning",
+  "short_name": "Rural Learning",
   "name": "Digital Learning Platform for Rural Schools",
   "icons": [
     {
-      "src": "favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "theme_color": "#1976d2",
-  "background_color": "#ffffff"
+  "theme_color": "#1e3c72",
+  "background_color": "#f4f7fb"
 }
-

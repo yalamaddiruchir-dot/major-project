@@ -1,7 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import '@fontsource/noto-sans-telugu/400.css';
+import '@fontsource/noto-sans-telugu/700.css';
+import '@fontsource/noto-sans-devanagari/400.css';
+import '@fontsource/noto-sans-devanagari/700.css';
 import './index.css';
 import App from './App';
+import { registerServiceWorker } from './services/swRegistration';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
@@ -10,16 +15,4 @@ root.render(
   </React.StrictMode>
 );
 
-// Register service worker for offline functionality
-if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
-      .then((registration) => {
-        console.log('SW registered: ', registration);
-      })
-      .catch((registrationError) => {
-        console.log('SW registration failed: ', registrationError);
-      });
-  });
-}
-
+registerServiceWorker();
